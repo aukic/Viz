@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+  <style>
+    .axis {
+      font: 10px sans-serif;
+    }
+
+    .axis path,
+    .axis line {
+      fill: none;
+      stroke: #000;
+      shape-rendering: crispEdges;
+    }
+
+    .axis {
+      font: 14px sans-serif;
+    }
+
+    .graphSvg {
+      transform: translate(950px, 50px);
+    }
+
+    .states :hover {
+      fill: red;
+    }
+
+    .states {
+      margin-top: 200px;
+      width: 800px;
+    }
+
+    .legend {
+      color: #fff;
+      position: absolute;
+      top: 50px;
+      left: 170px;
+    }
+
+    .state-borders {
+      fill: none;
+      stroke: #fff;
+      stroke-width: 0.5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+      pointer-events: none;
+    }
+
+    .html {
+      overflow-y: scroll;
+      overflow-x: hidden;
+    }
+
+    .body {
+      overflow-y: scroll;
+      position: absolute;
+    }
+
+    .info {
+      font: Monaco;
+      font-size: 17px;
+    }
+
+    .svg {
+      position: relative;
+      float: left;
+    }
+  </style>
+
+  <head>
+    <svg width="1850" height="800"></svg>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="https://d3js.org/topojson.v2.min.js"></script>
+    <script src="http://labratrevenge.com/d3-tip/javascripts/d3.tip.v0.6.3.js"></script>
+  </head>
+
+  <body>
+    <script>
+      var margin = { top: 50, bottom: 70, left: 80, right: 20 };
+      var width1 = 960;
+      var height1 = 700;
+      var width = 800;
+      var height = 800;
+      var svg = d3.select("svg");
+
+      var legendTitle = "Prikaz religija po državama";
+
+      svg
+        .append("text")
+        .attr("x", 630)
+        .attr("y", 30)
+        .attr("dy", ".25em")
+        .attr("font-family", "sans-serif")
+        .attr("font-weight", "700")
+        .attr("font-size", "35px")
+        .text(legendTitle);
+
+      var projection = d3
+        .geoMercator()
+        .center([0, 70])
+        .scale(125)
+        .rotate([10, 0]);
+
+      var path = d3.geoPath().projection(projection);
+      d3.select("body").append("div").attr("id", "info").attr("class", "info");
+      d3.json("data.json", function (error, data) {
+        d3.json("worldtopo.json", function (error, topology) {
+          svg
+            .append("g")
+            .attr("class", "states")
+            .selectAll("path")
+            .data(
+              topojson.feature(topology, topology.objects.countries).features
+            )
+            .enter()
+            .append("path")
+            .attr("d", path)
+            .on("click", function (d) {
+              data.forEach((element) => {
+                if (d.properties.name === element.country) {
+                  const data = {
+                    naziv_drzave: element.country,
+                    chistians: element.chistians,
+                    muslims: element.muslims,
+                    unaffiliated: element.unaffiliated,
+                    hindus: element.hindus,
+                    buddhists: element.buddhists,
+                    folkReligions: element.folkReligions,
+                    other: element.other,
+                    jews: element.jews,
+                  };
+                  makeGraphs(data);
+                }
+              });
+            });
+        });
+      });
+      var zoom = d3.zoom().on("zoom", function () {
+        svg.attr("transform", d3.zoomTransform(this));
+        svg.selectAll("path").attr("d", path.projection(projection));
+      });
+      svg.call(zoom);
+      var graphSvg = d3
+        .select("svg")
+        .append("g")
+        .attr("class", "graphSvg")
+        .attr("width", 1500 + margin.left + margin.right)
+        .attr("height", 1500 + margin.bottom + margin.top)
+        .style("background-color", "white")
+        .append("g")
+        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+      let graphMade = false;
+
+      function makeGraphs(data1) {
+        if (graphMade) {
+          graphSvg.selectAll("*").remove();
+        }
+
+        var data = [
+          { Vrsta: "chistians", Total: data1.chistians },
+          { Vrsta: "muslims", Total: data1.muslims },
+          { Vrsta: "unaffiliated", Total: data1.unaffiliated },
+          { Vrsta: "hindus", Total: data1.hindus },
+          { Vrsta: "buddhists", Total: data1.buddhists },
+          { Vrsta: "folkReligions", Total: data1.folkReligions },
+          { Vrsta: "other", Total: data1.other },
+          { Vrsta: "jews", Total: data1.jews },
+        ];
+
+        data.sort(function (a, b) {
+          return d3.descending(a.Total, b.Total);
+        });
+
+        const margin = { top: 20, bottom: 70, left: 40, right: 20 };
+        const height = 700 - margin.top - margin.bottom;
+        const width = 900 - margin.left - margin.right;
+        const barPadding = 4;
+        const barWidth = width / data.length - barPadding * 15;
+
+        const xBarchart = d3
+          .scaleBand()
+          .domain(d3.range(data.length))
+          .rangeRound([0, width]);
+
+        const yBarchart = d3
+          .scaleLinear()
+          .domain([
+            0,
+            d3.max(data, function (d) {
+              return d.Total;
+            }),
+          ])
+          .range([height, 0]);
+
+        const makeYLines = () => d3.axisLeft().scale(yBarchart);
+        const xAxisBarchart = d3
+          .axisBottom(xBarchart)
+          .tickFormat(function (d, i) {
+            return data[i].Vrsta;
+          });
+
+        const yAxisBarchart = d3.axisLeft(yBarchart).ticks(10);
+        graphSvg
+          .append("g")
+          .call(makeYLines().tickSize(-width, 0, 0).tickFormat(""));
+        graphSvg
+          .append("g")
+          .attr("class", "x axis")
+          .attr("transform", "translate(0," + height + ")")
+          .call(xAxisBarchart)
+          .selectAll("text")
+          .style("text-anchor", "middle");
+
+        graphSvg
+          .append("text")
+          .attr("x", width / 2)
+          .attr("y", -(margin.top / 2))
+          .attr("font-weight", "bold")
+          .style("font-size", "20px")
+          .style("text-anchor", "middle")
+          .text("Zastupljenost religija u " + data1.naziv_drzave);
+
+        graphSvg.append("g").attr("class", "y axis").call(yAxisBarchart);
+
+        graphSvg
+          .append("text")
+          .attr("x", -(height / 2))
+          .attr("y", -(margin.left / 2 + 90))
+          .attr("transform", "rotate(-90)")
+          .attr("dy", "1em")
+          .style("text-anchor", "middlEe")
+          .style("font-size", "17px")
+          .text("Broj vijernika");
+
+        graphSvg
+          .append("text")
+          .attr("x", width / 2 - 60)
+          .attr("y", height + margin.bottom / 2)
+          .attr("dy", "1em")
+          .style("text-anchor", "middlEe")
+          .style("font-size", "17px")
+          .text("Vjera");
+
+        var barchart = graphSvg
+          .selectAll("rect")
+          .data(data)
+          .enter()
+          .append("rect")
+          .attr("transform", "translate(30,0)")
+          .attr("x", function (d, i) {
+            return xBarchart(i);
+          })
+          .attr("y", function (d, i) {
+            return yBarchart(d.Total);
+          })
+          .attr("height", function (d) {
+            return height - yBarchart(d.Total);
+          })
+          .attr("width", barWidth)
+          .attr("fill", "navy");
+        barchart
+          .append("text")
+          .attr("x", (a, i) => xBarchart(i) + xBarchart.bandwidth() / 2)
+          .attr("y", (a) => yBarchart(a.Total) + 30)
+          .attr("text-anchor", "middle")
+          .text((a) => `${a.Total}%`);
+        graphMade = true;
+        var sum =
+          data1.chistians +
+          data1.muslims +
+          data1.buddhists +
+          data1.unaffiliated +
+          data1.hindus +
+          data1.folkReligions +
+          data1.other +
+          data1.jews;
+        d3.select("#info").html(`Država: <b>${
+          data1.naziv_drzave
+        }</b> <br> Krščani:
+          <b>${data1.chistians}(${((data1.chistians / sum) * 100).toFixed(
+          2
+        )}%)</b>   Muslimani:
+        <b>${data1.muslims}(${((data1.muslims / sum) * 100).toFixed(2)}%)</b>
+           Budisti: 
+        <b>${data1.buddhists}(${((data1.buddhists / sum) * 100).toFixed(
+          2
+        )}%)</b>
+           Neodređeni: 
+        <b>${data1.unaffiliated}(${((data1.unaffiliated / sum) * 100).toFixed(
+          2
+        )}%)</b>
+        <br> Hindu:
+        <b>${data1.hindus}(${((data1.hindus / sum) * 100).toFixed(2)}%)</b>
+           Pučka religija: 
+        <b>${data1.folkReligions}(${((data1.folkReligions / sum) * 100).toFixed(
+          2
+        )}%)</b>
+           Židovi:
+        <b>${data1.jews}(${((data1.jews / sum) * 100).toFixed(2)}%)</b>
+           Ostali:
+        <b>${data1.other}(${((data1.other / sum) * 100).toFixed(2)}%)</b>
+         `);
+      }
+    </script>
+  </body>
+</html>
